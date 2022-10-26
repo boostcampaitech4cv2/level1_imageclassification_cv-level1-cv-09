@@ -19,8 +19,14 @@ from sklearn.model_selection import KFold, StratifiedKFold
 
 
 from dataset import MaskBaseDataset, BaseAugmentation
-from model import *
+from models import *
+from utils import DATA_CLASS_MODULE, MODEL_CLASS_MODULE
+from utils import import_class, setup_data_and_model_from_args
 
+
+"""
+시드를 고정하는 함수
+"""
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -36,6 +42,9 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
+"""
+이미지를 plot하는 함수
+"""
 
 def grid_image(np_images, gts, preds, n=16, shuffle=False):
     batch_size = np_images.shape[0]
@@ -66,6 +75,9 @@ def grid_image(np_images, gts, preds, n=16, shuffle=False):
 
     return figure
 
+"""
+유틸성으로 계속 폴더명을 1씩 늘림
+"""
 
 def increment_path(path, exist_ok=False):
     """ Automatically increment path, i.e. runs/exp --> runs/exp0, runs/exp1 etc.
@@ -95,10 +107,12 @@ def train(data_dir, model_dir, args):
     device = torch.device("cuda" if use_cuda else "cpu")
 
     # -- dataset
-    dataset = MaskBaseDataset(
-        data_dir=data_dir,
-    )
-    num_classes = dataset.num_classes  # 18
+    dataset, model = setup_data_and_model_from_args(args)
+
+    print("dataset type:", type(dataset))
+    print("model type:", type(model))
+
+    num_classes = dataset.num_classes  # 18hist
 
     # -- augmentation
     transform = BaseAugmentation(
@@ -110,41 +124,7 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
 
-    """
-    SANGMO
-    """
-
-    # train_set, val_set = dataset.split_dataset()
-
-    # train_loader = DataLoader(
-    #     train_set,
-    #     batch_size=args.batch_size,
-    #     num_workers=multiprocessing.cpu_count() // 2,
-    #     shuffle=True,
-    #     pin_memory=use_cuda,
-    #     drop_last=True,
-    # )
-
-    # val_loader = DataLoader(
-    #     val_set,
-    #     batch_size=args.valid_batch_size,
-    #     num_workers=multiprocessing.cpu_count() // 2,
-    #     shuffle=False,
-    #     pin_memory=use_cuda,
-    #     drop_last=True,
-    # )
-
-    # -- model
-    """
-    Custom으로 바꿀 수 있으면 가능하고, 아니면 일단 여러번 주석을 치자
-    """
-    # model = BaseModel(
-    #     num_classes=num_classes
-    # ).to(device)
-
-    model = ResNet34(        
-    ).to(device)
-
+    model = model.to(device)
     model = torch.nn.DataParallel(model)
 
     # -- loss & metric
@@ -163,6 +143,8 @@ def train(data_dir, model_dir, args):
 
     best_val_acc = 0
     best_val_loss = np.inf
+
+    print("This dataset has unique value of :", len(set(dataset.labels)))
     for epoch in range(args.epochs):
 
         """
@@ -175,7 +157,6 @@ def train(data_dir, model_dir, args):
         global_val_losses = []
         global_val_accs = []
         
-
         for skfold, (train_idx, val_idx) in enumerate(skfold.split(X = dataset.image_paths , y = dataset.multi_labels)):
             print(f"Fold {skfold+1} Start")
 
@@ -293,9 +274,13 @@ def train(data_dir, model_dir, args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
+    #Initialize data and model class
+    parser.add_argument('--data_class', type=str, default="MaskBaseDataset", help='Which dataset will you use?')
+    parser.add_argument("--model_class", type = str, default = "ResNet101", help = "Which model will you use?")
+
     # Data and model checkpoints directories
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
-    parser.add_argument('--epochs', type=int, default=3, help='number of epochs to train (default: 5)')
+    parser.add_argument('--epochs', type=int, default=5, help='number of epochs to train (default: 5)')
     parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--valid_batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')

@@ -90,6 +90,7 @@ class MaskBaseDataset(Dataset):
 
     #추가
     multi_labels = []
+    labels = multi_labels[:]
 
     def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.data_dir = data_dir
@@ -223,3 +224,68 @@ class TestDataset(Dataset):
     def __len__(self):
         return len(self.img_paths)
 
+
+class MaskOnlyDataset(MaskBaseDataset):
+    labels = MaskBaseDataset.mask_labels
+    num_classes = 3
+
+    def __init__(self, data_dir):
+        super().__init__(data_dir)
+
+    def __getitem__(self, index):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+        image = self.read_image(index)
+        mask_label = self.get_mask_label(index)
+        image_transform = self.transform(image)
+        return image_transform, mask_label
+
+class AgeOnlyDataset(MaskBaseDataset):
+    labels = MaskBaseDataset.age_labels
+    num_classes = 3
+
+    def __init__(self, data_dir):
+        super().__init__(data_dir)
+
+    def __getitem__(self, index):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+        image = self.read_image(index)
+        age_label = self.get_age_label(index)
+        image_transform = self.transform(image)
+        return image_transform, age_label
+
+
+class GenderOnlyDataset(MaskBaseDataset):
+    labels = MaskBaseDataset.gender_labels
+    num_classes = 2
+
+    def __init__(self, data_dir):
+        super().__init__(data_dir)
+
+    def __getitem__(self, index):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+
+        image = self.read_image(index)
+        gender_label = self.get_gender_label(index)
+        image_transform = self.transform(image)
+        return image_transform, gender_label
+
+
+# dataset = GenderOnlyDataset("../input/data/train/images")
+
+
+# transform = BaseAugmentation(
+#     resize= [128,56],
+#     mean=dataset.mean,
+#     std=dataset.std,
+# )
+
+# dataset.set_transform(transform)
+
+
+# train_loader = DataLoader(dataset, batch_size = 3)
+
+# img, label = next(iter(train_loader))
+
+# print("img.shape:", img.shape)
+# print("label.shape:", label.shape)
+# print("label:", label)

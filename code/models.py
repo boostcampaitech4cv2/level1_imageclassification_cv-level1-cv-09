@@ -53,5 +53,12 @@ class ResNet34(nn.Module):
         x = self.resnet(x)
         return x
 
-        
-        
+class ResNet101(nn.Module):
+    def __init__(self, num_classes = 18):
+        super(ResNet101, self).__init__()
+        self.resnet = torchvision.models.resnet101(pretrained = True)
+        self.resnet.fc = nn.Linear(512,num_classes)
+    
+    def forward(self, x):
+        x = self.resnet(x)
+        return x
