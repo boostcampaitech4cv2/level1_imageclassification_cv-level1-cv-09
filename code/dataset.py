@@ -4,14 +4,14 @@ from typing import Tuple
 
 import numpy as np
 from PIL import Image
-from torch.utils.data import Dataset, Subset, random_split
+from torch.utils.data import Dataset, Subset, random_split, DataLoader
 from torchvision.transforms import Resize, ToTensor, Normalize, Compose
+import multiprocessing
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
     ".PNG", ".ppm", ".PPM", ".bmp", ".BMP",
 ]
-
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
@@ -88,6 +88,9 @@ class MaskBaseDataset(Dataset):
     gender_labels = []
     age_labels = []
 
+    #추가
+    multi_labels = []
+
     def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         self.data_dir = data_dir
         self.mean = mean
@@ -121,6 +124,7 @@ class MaskBaseDataset(Dataset):
                 self.mask_labels.append(mask_label)
                 self.gender_labels.append(gender_label)
                 self.age_labels.append(age_label)
+                self.multi_labels.append(self.encode_multi_class(mask_label, gender_label, age_label))
 
     def calc_statistics(self):
         has_statistics = self.mean is not None and self.std is not None
@@ -218,3 +222,4 @@ class TestDataset(Dataset):
 
     def __len__(self):
         return len(self.img_paths)
+
