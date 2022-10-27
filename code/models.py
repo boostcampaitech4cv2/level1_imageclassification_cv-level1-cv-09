@@ -57,8 +57,20 @@ class ResNet101(nn.Module):
     def __init__(self, num_classes = 18):
         super(ResNet101, self).__init__()
         self.resnet = torchvision.models.resnet101(pretrained = True)
-        self.resnet.fc = nn.Linear(512,num_classes)
+        in_features = self.resnet.fc.in_features
+        self.resnet.fc = nn.Linear(in_features , num_classes)
     
     def forward(self, x):
         x = self.resnet(x)
+        return x
+
+class EfficientV2(nn.Module):
+    def __init__(self, num_classes = 18):
+        super(EfficientV2, self).__init__()
+        self.effnet = torchvision.models.efficientnet_v2_s(pretrained = True)
+        in_features = self.effnet.classifier[1].in_features
+        self.effnet.classifier[1] = nn.Linear(in_features , num_classes)
+
+    def forward(self, x):
+        x = self.effnet(x)
         return x

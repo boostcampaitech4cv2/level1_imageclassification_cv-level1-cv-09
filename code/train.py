@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import random
 import re
+from importlib import import_module
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -19,9 +20,10 @@ from sklearn.model_selection import KFold, StratifiedKFold
 
 
 from dataset import MaskBaseDataset, BaseAugmentation
-from models import *
 from utils import DATA_CLASS_MODULE, MODEL_CLASS_MODULE
 from utils import import_class, setup_data_and_model_from_args
+from loss import create_criterion
+
 
 
 """
@@ -115,7 +117,8 @@ def train(data_dir, model_dir, args):
     num_classes = dataset.num_classes  # 18hist
 
     # -- augmentation
-    transform = BaseAugmentation(
+    transform_module = getattr(import_module("dataset"), args.augmentation)  # default: BaseAugmentation
+    transform = transform_module(
         resize=args.resize,
         mean=dataset.mean,
         std=dataset.std,
@@ -127,9 +130,10 @@ def train(data_dir, model_dir, args):
     model = model.to(device)
     model = torch.nn.DataParallel(model)
 
-    # -- loss & metric
-    criterion = nn.CrossEntropyLoss()
-    optimizer = SGD(
+    # -- loss & metric & optimizer
+    criterion = create_criterion(args.criterion, classes = dataset.num_classes)  # default: cross_entropy
+    opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
+    optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=args.lr,
         weight_decay=5e-4
@@ -265,6 +269,10 @@ def train(data_dir, model_dir, args):
             f"[Val] acc : {total_val_acc:4.2%}, loss: {total_val_loss:4.2} || "
             f"best acc : {best_val_acc:4.2%}, best loss: {best_val_loss:4.2}"
         )
+
+        with open(f"{save_dir}/record.txt", "a") as f:
+            f.write(f"EPOCH {epoch+1} Total_val_acc : {total_val_acc}, Total_loss: {total_val_loss}, Best_val_acc: {best_val_acc}, Best_val_loss: {best_val_loss}")
+
         logger.add_scalar("Val/loss", total_val_loss, epoch)
         logger.add_scalar("Val/accuracy", total_val_acc, epoch)
         logger.add_figure("results", figure, epoch)
@@ -276,11 +284,18 @@ if __name__ == '__main__':
 
     #Initialize data and model class
     parser.add_argument('--data_class', type=str, default="MaskBaseDataset", help='Which dataset will you use?')
-    parser.add_argument("--model_class", type = str, default = "ResNet101", help = "Which model will you use?")
+    parser.add_argument("--model_class", type = str, default = "EfficientV2", help = "Which model will you use?")
+
+    #Augmentation and optimizer and Loss
+    parser.add_argument('--augmentation', type=str, default='BaseAugmentation', help='data augmentation type (default: BaseAugmentation)')
+    parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: SGD)')
+    parser.add_argument('--criterion', type=str, default='cross_entropy', help='criterion type (default: cross_entropy)')
 
     # Data and model checkpoints directories
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
-    parser.add_argument('--epochs', type=int, default=5, help='number of epochs to train (default: 5)')
+    parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 5)')
+
+    #이미지 사이즈를 (128,96)으로 놓은 이유가 있을까
     parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--valid_batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
