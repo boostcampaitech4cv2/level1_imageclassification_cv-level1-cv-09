@@ -10,7 +10,6 @@ from PIL import Image
 from torch.utils.data import Dataset, Subset, random_split
 from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop
 from torchvision.transforms import ColorJitter, RandomHorizontalFlip, RandomRotation
-from imgaug import augmenters as iaa
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
@@ -57,7 +56,9 @@ class Add__Noise(object):
         #####
         return
 
-### --- acc : 73.86%, loss:  0.2 ---
+    
+### --------- acc : 73.86%, loss:  0.2 --------- ###
+
 class Custom_BaseAugmentation :
     def __init__(self, resize, mean, std, **args) :
         self.transform = Compose([
@@ -70,6 +71,9 @@ class Custom_BaseAugmentation :
 
     def __call__(self, image) :
         return self.transform(image)
+    
+### ------------------- copy ------------------- ###
+
 
 class CustomAugmentation:
     def __init__(self, resize, mean, std, **args):
