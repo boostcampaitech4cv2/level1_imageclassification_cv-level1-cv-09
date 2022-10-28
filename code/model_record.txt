@@ -6,9 +6,49 @@ age9, gender7, mask7
 ## F1-loss로 학습
 age10, gender9, mask9
 
-#Exp3 : F1 0.557, Acc 64.61, Eff-net, 10-epochs, and other base options
+#Exp3 : F1 0.567, Acc 65.41 Eff-net, 10-epochs, and other base options
 ## Labelsmooth-loss로 학습
 age11, gender10, mask10
+
+#Exp4(Failure) : F1 0.046, Acc 12.-7
+- 데이터가 부족하거나, 구현이 잘못되었거나.
+- Dataset를 구분하였으므로, 거기서부터 잘못되었을 가능성이 있음.
+
+#Exp5(???) : F1 ???? , Acc ???
+- CustomAugmentation을 적용
+- Profile을 custom하여 적용
+- 그러나 여전히 overfitting같음. 
+- 내일 제출 기회가 남으면 제출해보자구!
+- age19, gender14, mask12
+
+#Exp6(Failure) : F1 0.02, Acc 3.63
+- Profile을 custom하여 적용
+- 아무리봐도 Dataset 구현오류라고 생각한다.
+- age21, gender16, mask13
+
+#Exp7()
+- 원래 잘 됐던 GenderDataset을 이용하였다
+- BaseDataset을 잘못 정의한 부분이 문제라고 생각했다.
+- 그렇다고 해봤자 len이 바뀐것뿐인데, 뭐가 달라질까?
+- 이번에도 첫 prediction값이 13이 아니라면 하지 말자.(12 그런 식이라면..
+===> 완전히 같음
+
+-Bad_pattern은 따로 저장하자
+- age22, gender17, mask14 ==> 안 될 것같음
+
+
+--age_dir "saved_models/joint_exp/age21" \
+--gender_dir "saved_models/joint_exp/gender16" \
+--mask_dir "saved_models/joint_exp/mask13"
+
+#Exp8 - kfold test
+--age_dir "saved_models/joint_exp/age31" \
+--gender_dir "saved_models/joint_exp/gender18" \
+--mask_dir "saved_models/joint_exp/mask15"
+
+
+
+
 
 #Further-to-do 
 * Cut-Mix 구현 
