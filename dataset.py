@@ -57,6 +57,7 @@ class Add__Noise(object):
         #####
         return
 
+### --- acc : 73.86%, loss:  0.2 ---
 class Custom_BaseAugmentation :
     def __init__(self, resize, mean, std, **args) :
         self.transform = Compose([
