@@ -24,6 +24,9 @@ from utils import DATA_CLASS_MODULE, MODEL_CLASS_MODULE
 from utils import import_class, setup_data_and_model_from_args
 from loss import create_criterion
 
+#CutMix
+from utils import rand_bbox, cutmix_plot
+
 
 
 """
@@ -126,6 +129,9 @@ def train(data_dir, model_dir, args):
 
     # -- data_loader
     train_set, val_set = dataset.split_dataset()
+    train_sampler = dataset.get_sampler("train")
+    val_sampler = dataset.get_sampler("val")
+
 
     train_loader = DataLoader(
         train_set,
@@ -134,6 +140,7 @@ def train(data_dir, model_dir, args):
         shuffle=True,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler = train_sampler,
     )
 
     val_loader = DataLoader(
@@ -143,6 +150,7 @@ def train(data_dir, model_dir, args):
         shuffle=False,
         pin_memory=use_cuda,
         drop_last=True,
+        sampler = val_sampler
     )
 
     # -- model
@@ -169,6 +177,9 @@ def train(data_dir, model_dir, args):
 
     best_val_acc = 0
     best_val_loss = np.inf
+
+    patience_limit = 3
+    patience_check = 0
     for epoch in range(args.epochs):
         # train loop
         model.train()
@@ -179,11 +190,29 @@ def train(data_dir, model_dir, args):
             inputs = inputs.to(device)
             labels = labels.to(device)
 
-            optimizer.zero_grad()
+            if args.cutmix == "yes":
 
-            outs = model(inputs)
-            preds = torch.argmax(outs, dim=-1)
-            loss = criterion(outs, labels)
+                #Cutmix logic
+                lam = np.random.beta(1.0, 1.0)  #베타분포에서 lam 가져오기
+                rand_index = torch.randperm(inputs.size()[0]).to(device) #batch_size 내의 index 랜덤하게 가져옴
+                target_a = labels
+                target_b = labels[rand_index]
+                bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
+                inputs[:,:,bbx1:bbx2, bby1:bby2] = inputs[rand_index,:,bbx1:bbx2, bby1:bby2] 
+                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (inputs.size()[-1] * inputs.size()[-2]))
+
+                #초기화
+                optimizer.zero_grad()
+                outs = model(inputs)
+                preds = torch.argmax(outs, dim = -1)
+                loss = criterion(outs, target_a) * lam + criterion(outs, target_b) * (1. - lam)
+
+            else:
+                #초기화
+                optimizer.zero_grad()
+                outs = model(inputs)
+                preds = torch.argmax(outs, dim=-1)
+                loss = criterion(outs, labels)
 
             loss.backward()
             optimizer.step()
@@ -236,6 +265,18 @@ def train(data_dir, model_dir, args):
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
+
+            if (val_loss > best_val_loss) or (val_acc < best_val_acc):
+                patience_check+=1
+
+                if patience_check >= patience_limit:
+                    break 
+            else:
+                patience_check = 0
+
+
+
+
             if val_acc > best_val_acc:
                 print(f"New best model for val accuracy : {val_acc:4.2%}! saving the best model..")
                 torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
@@ -320,6 +361,9 @@ def kfold_train(data_dir, model_dir, args):
         best_val_acc = 0
         best_val_loss = np.inf
 
+        patience_limit = 3
+        patience_check = 0
+
         for epoch in range(args.epochs):
             global_val_losses = []
             global_val_accs = []
@@ -378,6 +422,10 @@ def kfold_train(data_dir, model_dir, args):
 
             scheduler.step()
 
+
+            #Early stopping
+
+
             # val loop
             with torch.no_grad():
                 print("Calculating validation results...")
@@ -415,10 +463,20 @@ def kfold_train(data_dir, model_dir, args):
             epoch_avg_acc =  sum(global_val_accs) / len(global_val_accs)
             best_val_loss = min(best_val_loss, epoch_avg_loss)
             
+            if (epoch_avg_loss > best_val_loss) or (epoch_avg_acc < best_val_acc):
+                patience_check +=1 
+
+                if patience_check >= patience_limit :
+                    break
+            else:
+                patience_check = 0
+
             if val_acc > best_val_acc:
                 print(f"New best model for val accuracy : {epoch_avg_acc:4.2%}! saving the best model..")
                 torch.save(model.module.state_dict(), f"{save_dir}/fold{fold}/best.pth")
                 best_val_acc = epoch_avg_acc
+            
+            
             torch.save(model.module.state_dict(), f"{save_dir}/fold{fold}/last.pth")
             print(
                 f"[Val] acc : {epoch_avg_acc:4.2%}, loss: {epoch_avg_loss:4.2} || "
@@ -441,8 +499,8 @@ if __name__ == '__main__':
     parser.add_argument("--model", type = str, default = "EfficientV2", help = "Which model will you use?")
 
     #Augmentation and optimizer and Loss
-    parser.add_argument('--augmentation', type=str, default='CustomAugmentation', help='data augmentation type (default: BaseAugmentation)')
-    parser.add_argument('--optimizer', type=str, default='SGD', help='optimizer type (default: SGD)')
+    parser.add_argument('--augmentation', type=str, default='BaseAugmentation', help='data augmentation type (default: BaseAugmentation)')
+    parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: SGD)')
     parser.add_argument('--criterion', type=str, default='cross_entropy', help='criterion type (default: cross_entropy)')
 
     # Data and model checkpoints directories
@@ -450,14 +508,20 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 5)')
 
     #이미지 사이즈를 (128,96)으로 놓은 이유가 있을까
-    parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
+    parser.add_argument("--resize", nargs="+", type=list, default=[228, 228], help='resize size for image when training')
+    #parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--valid_batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
-    parser.add_argument('--lr', type=float, default=1e-2, help='learning rate (default: 1e-3)')
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
     parser.add_argument('--val_ratio', type=float, default=0.2, help='ratio for validaton (default: 0.2)')
     parser.add_argument('--lr_decay_step', type=int, default=20, help='learning rate scheduler deacy step (default: 20)')
     parser.add_argument('--log_interval', type=int, default=20, help='how many batches to wait before logging training status')
     parser.add_argument('--name', default='exp', help='model save at {SM_MODEL_DIR}/{name}')
+
+
+    #CutMix 여부
+    parser.add_argument('--cutmix', type =str, default='no', help='Cutmix or not?')
+
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))

@@ -234,7 +234,7 @@ def kfold_inference(data_dir, model_dir, output_dir, args):
             
             sum_pred_arr /= FOLD_NUM
 
-            preds = sum_pred_arr.argmax(dim=-1)
+            preds = sum_pred_arr.argmax(axis=-1)
 
             if order == 0:
                 print("Mask model done. Multiply it by 6")

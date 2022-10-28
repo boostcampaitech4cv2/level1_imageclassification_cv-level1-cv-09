@@ -39,15 +39,12 @@ age11, gender10, mask10
 
 --age_dir "saved_models/joint_exp/age21" \
 --gender_dir "saved_models/joint_exp/gender16" \
---mask_dir "saved_models/joint_exp/mask13"
+--mask_dir "saved_models/joint_exp/mask20"
 
 #Exp8 - kfold test
 --age_dir "saved_models/joint_exp/age31" \
 --gender_dir "saved_models/joint_exp/gender18" \
---mask_dir "saved_models/joint_exp/mask15"
-
-
-
+--mask_dir "saved_models/joint_exp/mask20"
 
 
 #Further-to-do 

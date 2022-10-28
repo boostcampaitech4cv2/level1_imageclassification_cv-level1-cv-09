@@ -8,9 +8,14 @@ from torch.utils.data import DataLoader
 
 import numpy as np
 import torch
+import PIL
 from PIL import Image
-from torch.utils.data import Dataset, Subset, random_split
-from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop, ColorJitter
+from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler
+
+from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop, ColorJitter, RandomErasing
+from utils import rand_bbox, cutmix
+from facenet_pytorch import MTCNN
+
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
@@ -22,7 +27,7 @@ def is_image_file(filename):
 
 
 class BaseAugmentation:
-    def __init__(self, resize, mean, std, **args):
+    def __init__(self, resize=[380, 380], mean=(0.535, 0.491, 0.464), std=(0.237, 0.244, 0.251), **args):
         self.transform = Compose([
             Resize(resize, Image.BILINEAR),
             ToTensor(),
@@ -32,19 +37,41 @@ class BaseAugmentation:
     def __call__(self, image):
         return self.transform(image)
 
-class Augmentation:
-    def __init__(self, resize, mean, std, **args):
-        self.transform = Compose([
-            Resize(resize, Image.BILINEAR),
-            ToTensor(),
-            Normalize(mean=mean, std=std),
-        ])
+class AddGaussianNoise(object):
+    """
+        transform 에 없는 기능들은 이런식으로 __init__, __call__, __repr__ 부분을
+        직접 구현하여 사용할 수 있습니다.
+    """
 
-    def __call__(self, image):
-        return self.transform(image)
+    def __init__(self, mean=0., std=1.):
+        self.std = std
+        self.mean = mean
+
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
 
 
+# class FaceNet(object):
 
+#     def __init__(self, size):
+#         self.tf = torchvision.transforms.ToPILImage()
+#         self.toTensor = torchvision.transforms.ToTensor()
+#         self.center_crop = torchvision.transforms.CenterCrop(size)
+#         self.detector = MTCNN(image_size=size[0], margin=150, post_process=False)
+
+#     def __call__(self, tensor):
+#         img = self.tf(tensor)
+#         face = self.detector(img) # tensor
+
+#         if face == None:
+#             face = self.center_crop(tensor) # tensor
+#         else:
+#             face = PIL.ImageOps.invert(self.tf(face))  #tensor -> pil
+#             face = self.toTensor(face)  # pil -> tensor
+#         return face
 
 
 class AddGaussianNoise(object):
@@ -67,7 +94,7 @@ class AddGaussianNoise(object):
 class CustomAugmentation:
     def __init__(self, resize, mean, std, **args):
         self.transform = Compose([
-            CenterCrop((224, 224)),
+            CenterCrop((320, 256)),
             Resize(resize, Image.BILINEAR),
             ColorJitter(0.1, 0.1, 0.1, 0.1),
             ToTensor(),
@@ -77,6 +104,7 @@ class CustomAugmentation:
 
     def __call__(self, image):
         return self.transform(image)
+
 
 
 class MaskLabels(int, Enum):
@@ -336,6 +364,112 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         return [Subset(self, indices) for phase, indices in self.indices.items()]
 
 
+    def get_sampler(self, phase) :
+        _multi_class = []
+        for _idx in self.indices[phase]:
+            _temp = self.encode_multi_class(self.mask_labels[_idx],
+                                    self.gender_labels[_idx],
+                                    self.age_labels[_idx])
+            _multi_class.append(_temp)
+       
+        class_sample_count = np.array([len(np.where(_multi_class == t)[0]) for t in np.unique(_multi_class)])
+														   
+        weight = 1. / class_sample_count
+								  
+        samples_weight = np.array([weight[t] for t in _multi_class])
+        samples_weight = torch.from_numpy(samples_weight).double()
+        train_sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+        return train_sampler
+
+
+
+"""
+CutMixDataset:
+"""
+
+class CutMixDataset(MaskSplitByProfileDataset):
+    """
+        train / val 나누는 기준을 이미지에 대해서 random 이 아닌
+        사람(profile)을 기준으로 나눕니다.
+        구현은 val_ratio 에 맞게 train / val 나누는 것을 이미지 전체가 아닌 사람(profile)에 대해서 진행하여 indexing 을 합니다
+        이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
+    """
+
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+        self.indices = defaultdict(list)
+        super().__init__(data_dir, mean, std, val_ratio)
+
+        #Added
+        self.class_idx = [[] for i in range(18)]
+        self.istrain = []
+
+    def setup(self):
+        profiles = os.listdir(self.data_dir)
+        profiles = [profile for profile in profiles if not profile.startswith(".")]
+        split_profiles = self._split_profile(profiles, self.val_ratio)
+
+        cnt = 0
+        for phase, indices in split_profiles.items():
+            for _idx in indices:
+                profile = profiles[_idx]
+                img_folder = os.path.join(self.data_dir, profile)
+                for file_name in os.listdir(img_folder):
+                    _file_name, ext = os.path.splitext(file_name)
+                    if _file_name not in self._file_names:  # "." 로 시작하는 파일 및 invalid 한 파일들은 무시합니다
+                        continue
+
+                    img_path = os.path.join(self.data_dir, profile, file_name)  # (resized_data, 000004_male_Asian_54, mask1.jpg)
+                    mask_label = self._file_names[_file_name]
+
+                    id, gender, race, age = profile.split("_")
+                    gender_label = GenderLabels.from_str(gender)
+                    age_label = AgeLabels.from_number(age)
+
+                    self.image_paths.append(img_path)
+                    self.mask_labels.append(mask_label)
+                    self.gender_labels.append(gender_label)
+                    self.age_labels.append(age_label)
+
+                    multi_class = self.encode_multi_class(mask_label,gender_label,age_label)
+
+                    self.class_idx[multi_class].append(cnt)
+
+                    self.istrain.append(phase)
+
+                    self.indices[phase].append(cnt)
+                    cnt += 1
+
+    def split_dataset(self) -> List[Subset]:
+        return [Subset(self, indices) for phase, indices in self.indices.items()]
+
+    def __getitem__(self, index):
+        assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
+
+        _image = self.read_image(index)
+        mask_label = self.get_mask_label(index)
+        gender_label = self.get_gender_label(index)
+        age_label = self.get_age_label(index)
+        
+        multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+
+        if self.istrain[index] == "train" and random.choice([True,False]):
+            _idx2 = self.get_rand_idx(multi_class_label)
+            _image2 = self.read_image(_idx2)
+            _image = self.transform(_image)
+            _image2 = self.transform(_image2)
+
+            image = cutmix(_image,_image2)
+        else :           
+            image = BaseAugmentation()(_image)
+            
+        return image, multi_class_label
+    
+    def get_rand_idx(self,label):
+        return random.choice(self.class_idx[label])
+
+
+
+
 """
 MaskOnlyDataset, AgeOnlyDataset, GenderOnlyDataset:
 
@@ -371,7 +505,6 @@ class AgeOnlyDataset(MaskBaseDataset):
         age_label = self.get_age_label(index)
         image_transform = self.transform(image)
         return image_transform, age_label
-
 
 class GenderOnlyDataset(MaskBaseDataset):
     labels = MaskBaseDataset.gender_labels
@@ -589,69 +722,113 @@ Profile 커스텀
 """
 
 class MaskProfileOnlyDataset(MaskSplitByProfileDataset):
-    labels = MaskSplitByProfileDataset.mask_labels
     num_classes = 3
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         super().__init__(data_dir)
         
+                    
     def __getitem__(self, index):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
-        image = self.read_image(index)
+
+        _image = self.read_image(index)
         mask_label = self.get_mask_label(index)
-        image_transform = self.transform(image)
-        return image_transform, mask_label
-    
+        gender_label = self.get_gender_label(index)
+        age_label = self.get_age_label(index)
+        multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+
+        image = BaseAugmentation()(_image)
+
+        return image, mask_label
+
+    def read_image(self, index):
+        image_path = self.image_paths[index]
+        return Image.open(image_path)
+
 class AgeProfileOnlyDataset(MaskSplitByProfileDataset):
-    labels = MaskSplitByProfileDataset.age_labels
     num_classes = 3
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
         super().__init__(data_dir)
-
+                            
     def __getitem__(self, index):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
-        image = self.read_image(index)
+
+        _image = self.read_image(index)
+        mask_label = self.get_mask_label(index)
+        gender_label = self.get_gender_label(index)
         age_label = self.get_age_label(index)
-        image_transform = self.transform(image)
-        return image_transform, age_label
+        multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
+
+        image = BaseAugmentation()(_image)
+
+        return image, age_label
+
 
 class GenderProfileOnlyDataset(MaskSplitByProfileDataset):
-    labels = MaskSplitByProfileDataset.gender_labels
     num_classes = 2
 
-    def __init__(self, data_dir):
-        super().__init__(data_dir)
-
+    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+        super().__init__(data_dir, mean, std, val_ratio)
+                            
     def __getitem__(self, index):
         assert self.transform is not None, ".set_tranform 메소드를 이용하여 transform 을 주입해주세요"
 
-        image = self.read_image(index)
+        _image = self.read_image(index)
+        mask_label = self.get_mask_label(index)
         gender_label = self.get_gender_label(index)
-        image_transform = self.transform(image)
-        return image_transform, gender_label
+        age_label = self.get_age_label(index)
+        multi_class_label = self.encode_multi_class(mask_label, gender_label, age_label)
 
+        image = BaseAugmentation()(_image)
+
+        return image, gender_label
 
 """
 DATASET test code : 이렇게 dataset의 next, iter 결과 출력
 """
 
+dataset1 = MaskSplitByProfileDataset("../input/data/train/images")
+dataset2 = MaskProfileOnlyDataset("../input/data/train/images")
 
-# dataset = GenderProfileOnlyDataset("../input/data/train/images")
+transform1 = BaseAugmentation(
+    resize= [128,56],
+    mean=dataset1.mean,
+    std=dataset1.std,
+)
 
 
-# transform = BaseAugmentation(
-#     resize= [128,56],
-#     mean=dataset.mean,
-#     std=dataset.std,
-# )
+transform2 = BaseAugmentation(
+    resize= [128,56],
+    mean=dataset2.mean,
+    std=dataset2.std,
+)
 
-# dataset.set_transform(transform)
 
-# train_loader = DataLoader(dataset, batch_size = 3)
+dataset1.set_transform(transform1)
+dataset2.set_transform(transform2)
+
+dataset1 = dataset1.split_dataset()[0]
+dataset2 = dataset2.split_dataset()[0]
+
+train_loader1 = DataLoader(dataset1, batch_size = 2)
+train_loader2 = DataLoader(dataset2, batch_size = 2)
+
+
+img0, label0 = next(iter(train_loader1))
+print("img0.shape:", img0.shape)
+
+img1, label1 = next(iter(train_loader2))
+print("img0.shape:", img1.shape)
+
+
+
+
 # img, label = next(iter(train_loader))
+# img2, label2 = next(iter(train_loader2))
+# img3, label3 = next(iter(train_loader3))
 
-# print("img.shape:", img.shape)
-# print("label.shape:", label.shape)
-# print("label:", label)
-# print(len(dataset.labels))
+print(len(dataset1))
+print(len(dataset2))
+
+
