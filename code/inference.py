@@ -10,6 +10,9 @@ from torch.utils.data import DataLoader
 from utils import str_to_bool
 from dataset import TestDataset, MaskBaseDataset
 
+import warnings
+warnings.filterwarnings('ignore')
+
 FOLD_NUM = 5
 
 def load_model(saved_model, num_classes, device):
@@ -41,14 +44,15 @@ def inference(data_dir, model_dir, output_dir, args):
 
     SINGLE_TRAIN = str_to_bool(args.single)
     print("SINGLE TRAIN???:", SINGLE_TRAIN)
-
+    
+    print("APPLY TTA??????:", args.tta)
     if SINGLE_TRAIN:
         num_classes = MaskBaseDataset.num_classes  # 18
         model = load_model(model_dir, num_classes, device).to(device)
         model.eval()
 
         img_paths = [os.path.join(img_root, img_id) for img_id in info.ImageID]
-        dataset = TestDataset(img_paths, args.resize)
+        dataset = TestDataset(img_paths, args.resize, tta= args.tta)
         loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=args.batch_size,
@@ -89,7 +93,8 @@ def inference(data_dir, model_dir, output_dir, args):
             model.eval()
 
             img_paths = [os.path.join(img_root, img_id) for img_id in info.ImageID]
-            dataset = TestDataset(img_paths, args.resize)
+            dataset = TestDataset(img_paths, args.resize, tta= args.tta)
+            
             loader = torch.utils.data.DataLoader(
                 dataset,
                 batch_size=args.batch_size,
@@ -139,6 +144,11 @@ def inference(data_dir, model_dir, output_dir, args):
         tempfile.to_csv(save_other_path,index= False)
         print(f"Inference Done! Inference result saved at {save_path}")
         print(f"Other file is also done. Saved at {save_other_path}")
+
+
+"""
+SM : 마찬가지로, kfold inference도 구분하지 마세요!
+"""
 
 @torch.no_grad()
 def kfold_inference(data_dir, model_dir, output_dir, args):
@@ -277,8 +287,10 @@ if __name__ == '__main__':
     parser.add_argument('--single', type=str_to_bool, nargs='?', const=True, default=False)
 
     # Data and model checkpoints directories
-    parser.add_argument('--batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
-    parser.add_argument('--resize', type=tuple, default=(96, 128), help='resize size for image when you trained (default: (96, 128))')
+    parser.add_argument('--batch_size', type=int, default=64, help='input batch size for validing (default: 1000)')
+    
+    # parser.add_argument('--resize', type=tuple, help='resize size for image when you trained (default: (96, 128))')
+    parser.add_argument('--resize', type=tuple, default=(380, 380), help='resize size for image when you trained (default: (96, 128))')
     parser.add_argument('--model', type=str, default='BaseModel', help='model type (default: BaseModel)')
 
     # Container environment
@@ -292,7 +304,13 @@ if __name__ == '__main__':
     parser.add_argument("--gender_dir", type=str, default = "/saved_models/joint_exp/gender")
     parser.add_argument("--mask_dir", type=str, default = "/saved_models/joint_exp/mask")
 
+    #Will you do tta???
+    parser.add_argument('--tta', type=str_to_bool, nargs='?', const=True, default=False)
+
     args = parser.parse_args()
+
+
+    assert args.resize is not None, "Resize를 꼭 지정해주시고 반드시 반드시반드시 반드시 Train과 동일하게 지정해주세요!!!!!!!!!!!!!!!!!!!!!!!!!!"
 
     data_dir = args.data_dir
     model_dir = args.model_dir
@@ -300,7 +318,8 @@ if __name__ == '__main__':
 
     os.makedirs(output_dir, exist_ok=True)
 
+    print("잠깐! 혹시 inference의 resize가 train과 맞는지 확인하셨나요?")
     #Change if you want to do kfold, or just use inference
-
-    #inference(data_dir, model_dir, output_dir, args)
-    kfold_inference(data_dir, model_dir, output_dir, args)
+    inference(data_dir, model_dir, output_dir, args)
+    #kfold_inference(data_dir, model_dir, output_dir, args)
+    print("됐습니다! 혹시 inference의 resize가 train과 맞는지 확인하셨나요?")

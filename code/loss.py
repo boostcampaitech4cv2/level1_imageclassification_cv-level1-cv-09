@@ -24,7 +24,7 @@ class FocalLoss(nn.Module):
 
 
 class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes=3, smoothing=0.0, dim=-1):
+    def __init__(self, classes=3, smoothing=0.1, dim=-1):
         super(LabelSmoothingLoss, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing

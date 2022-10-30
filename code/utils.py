@@ -3,36 +3,13 @@ import importlib
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import os 
+import shutil
 
 DATA_CLASS_MODULE = "dataset"
 MODEL_CLASS_MODULE = "models"
 TRAIN_DATA_DIR = "../input/data/train/images"
 
-def import_class(module_and_class_name):
-    module_name, class_name = module_and_class_name.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    class_ = getattr(module, class_name)
-    return class_
-
-def setup_data_and_model_from_args(args: argparse.Namespace, data_class_module = DATA_CLASS_MODULE, model_class_module = MODEL_CLASS_MODULE):
-    data_class = import_class(f"{data_class_module}.{args.data_class}")
-    model_class = import_class(f"{model_class_module}.{args.model_class}")
-
-    dataset = data_class(TRAIN_DATA_DIR)
-
-    #Fine-tuning 결과에 따라 달라질 것임
-    model = model_class(dataset.num_classes)
-    return dataset, model
-
-def str_to_bool(value):
-    if isinstance(value, bool):
-        return value
-    if value.lower() in {'false', 'f', '0', 'no', 'n'}:
-        return False
-    elif value.lower() in {'true', 't', '1', 'yes', 'y'}:
-        return True
-    raise ValueError(f'{value} is not a valid boolean value')
-
 
 def str_to_bool(value):
     if isinstance(value, bool):
@@ -44,41 +21,37 @@ def str_to_bool(value):
     raise ValueError(f'{value} is not a valid boolean value')
 
 """
+Original cutmix
 https://sseunghyuns.github.io/classification/2021/05/25/invasive-pytorch/#
+
+원래는 Beta분포로 랜덤하게 Bbox를 합쳐야 하지만,
+학습의 용이성을 위해 절반만 잘라붙었음.
 """
 
-def rand_bbox(size, lam): # size : [B, C, W, H]
-    W = size[2] # 이미지의 width
-    H = size[3] # 이미지의 height
-    cut_rat = np.sqrt(1. - lam)  # 패치 크기의 비율 정하기
-    cut_w = np.int(W * cut_rat)  # 패치의 너비
-    cut_h = np.int(H * cut_rat)  # 패치의 높이
+def rand_bbox(size, lam):
+    W = size[-2]  # C x W x H  (3D) or B x C x W x H (4D)
+    H = size[-1]
+
+    #cut_rat = np.sqrt(1. - lam)
+    #cut_w = np.int(W * cut_rat)
+    #cut_h = np.int(H * cut_rat)
 
     # uniform
-    # 기존 이미지의 크기에서 랜덤하게 값을 가져옵니다.(중간 좌표 추출)
-    cx = np.random.randint(W)
-    cy = np.random.randint(H)
+    #cx = np.random.randint(W)
+    #cy = np.random.randint(H)
 
-    # 패치 부분에 대한 좌표값을 추출합니다.
-    bbx1 = np.clip(cx - cut_w // 2, 0, W)
-    bby1 = np.clip(cy - cut_h // 2, 0, H)
-    bbx2 = np.clip(cx + cut_w // 2, 0, W)
-    bby2 = np.clip(cy + cut_h // 2, 0, H)
+    bbx1 = np.clip(0,0,W)
+    bby1 = np.clip(H // 2,0,H)
+    bbx2 = np.clip(W,0,W)
+    bby2 = np.clip(H,0,H)
 
     return bbx1, bby1, bbx2, bby2
 
 def cutmix(im1,im2):
-
-    bbx1, bby1, bbx2, bby2 = rand_bbox(size = im2.size(), lam = 0) 
+    #print(im1)
+    bbx1, bby1, bbx2, bby2 = rand_bbox(size = im2.size(), lam = 0) #동일 라벨일 경우 ram 생략
     im1[:, bbx1:bbx2, bby1:bby2] = im2[:, bbx1:bbx2,bby1:bby2]
     return im1
-
-
-
-
-
-
-
 
 
 def cutmix_plot(train_loader):
@@ -101,3 +74,24 @@ def cutmix_plot(train_loader):
         axes[i].axis('off')
         plt.savefig(f"tmp_{i}.png", dpi = 200)
     return
+
+
+def remove_strange_files():
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    for path, dirs, files in os.walk(dir_path):
+        for file in files:
+            file_path = os.path.join(path, file)
+            if file.startswith('._'):
+                os.remove(file_path)
+                print(f'removed {file_path}')
+
+def copy_files_to_upper_dir():
+    dir_path = os.path.dirname("/opt/ml/input/data/train/images/")
+    for subdir in os.listdir(dir_path):
+        filepath = os.path.join(dir_path, subdir)
+        if subdir.endswith("jpg") or subdir.endswith("jpeg"): continue
+        for file in os.listdir(filepath):
+            old_path = os.path.join(filepath, file)
+            new_name = subdir + "_"+ file
+            new_path = os.path.join(dir_path, new_name)
+            shutil.copy(old_path, new_path)

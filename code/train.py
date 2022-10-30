@@ -13,7 +13,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import SGD
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import KFold, StratifiedKFold
@@ -21,12 +21,12 @@ from sklearn.model_selection import KFold, StratifiedKFold
 
 from dataset import MaskBaseDataset, BaseAugmentation
 from utils import DATA_CLASS_MODULE, MODEL_CLASS_MODULE
-from utils import import_class, setup_data_and_model_from_args
 from loss import create_criterion
 
-#CutMix
-from utils import rand_bbox, cutmix_plot
-
+#CutMix 
+from utils import rand_bbox, cutmix_plot, cutmix
+import warnings
+warnings.filterwarnings('ignore')
 
 
 """
@@ -137,7 +137,7 @@ def train(data_dir, model_dir, args):
         train_set,
         batch_size=args.batch_size,
         num_workers=multiprocessing.cpu_count() // 2,
-        shuffle=True,
+        shuffle= False,
         pin_memory=use_cuda,
         drop_last=True,
         sampler = train_sampler,
@@ -168,18 +168,26 @@ def train(data_dir, model_dir, args):
         lr=args.lr,
         weight_decay=5e-4
     )
-    scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
+    # scheduler = StepLR(optimizer, args.lr_decay_step, gamma=0.5)
+    scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=10, eta_min=2e-5)
 
     # -- logging
     logger = SummaryWriter(log_dir=save_dir)
     with open(os.path.join(save_dir, 'config.json'), 'w', encoding='utf-8') as f:
         json.dump(vars(args), f, ensure_ascii=False, indent=4)
 
+
     best_val_acc = 0
     best_val_loss = np.inf
 
+
+    """
+    추가) Early stopping을 적용하기 위해, 정확도를 확인!
+    """
+
     patience_limit = 3
     patience_check = 0
+
     for epoch in range(args.epochs):
         # train loop
         model.train()
@@ -190,29 +198,23 @@ def train(data_dir, model_dir, args):
             inputs = inputs.to(device)
             labels = labels.to(device)
 
-            if args.cutmix == "yes":
+            optimizer.zero_grad()
 
-                #Cutmix logic
-                lam = np.random.beta(1.0, 1.0)  #베타분포에서 lam 가져오기
-                rand_index = torch.randperm(inputs.size()[0]).to(device) #batch_size 내의 index 랜덤하게 가져옴
+            if args.cutmix == "yes" and np.random.rand() > args.cutmix_prob:
+                lam = 0.5
+                rand_index = torch.randperm(inputs.size()[0]).to(device)
                 target_a = labels
-                target_b = labels[rand_index]
+                target_b = labels[rand_index]            
                 bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
-                inputs[:,:,bbx1:bbx2, bby1:bby2] = inputs[rand_index,:,bbx1:bbx2, bby1:bby2] 
-                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (inputs.size()[-1] * inputs.size()[-2]))
-
-                #초기화
-                optimizer.zero_grad()
-                outs = model(inputs)
-                preds = torch.argmax(outs, dim = -1)
-                loss = criterion(outs, target_a) * lam + criterion(outs, target_b) * (1. - lam)
+                inputs[:, :, bbx1:bbx2, bby1:bby2] = inputs[rand_index, :, bbx1:bbx2, bby1:bby2]
+                outputs = model(inputs)
+                preds = torch.argmax(outputs, dim = -1)
+                loss = criterion(outputs, target_a) * lam + criterion(outputs, target_b) * (1. - lam)
 
             else:
-                #초기화
-                optimizer.zero_grad()
-                outs = model(inputs)
-                preds = torch.argmax(outs, dim=-1)
-                loss = criterion(outs, labels)
+                outputs = model(inputs)
+                preds = torch.argmax(outputs, dim=-1)
+                loss = criterion(outputs, labels)
 
             loss.backward()
             optimizer.step()
@@ -242,6 +244,7 @@ def train(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+
             for val_batch in val_loader:
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
@@ -259,22 +262,25 @@ def train(data_dir, model_dir, args):
                     inputs_np = torch.clone(inputs).detach().cpu().permute(0, 2, 3, 1).numpy()
                     inputs_np = dataset_module.denormalize_image(inputs_np, dataset.mean, dataset.std)
                     figure = grid_image(
-                        inputs_np, labels, preds, n=16, shuffle=args.dataset != "MaskSplitByProfileDataset"
+                        inputs_np, labels, preds, n=16, shuffle= args.dataset != "MaskSplitByProfileDataset"
                     )
 
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
 
+
+            #추가 : Early stopping 부분
             if (val_loss > best_val_loss) or (val_acc < best_val_acc):
                 patience_check+=1
 
-                if patience_check >= patience_limit:
-                    break 
+                if patience_check == patience_limit:
+                    print("EARLY STOPPING")
+                    break
             else:
                 patience_check = 0
-
-
+            
+            #추가 끝
 
 
             if val_acc > best_val_acc:
@@ -293,7 +299,7 @@ def train(data_dir, model_dir, args):
 
 
 """
-TO-DO: Kfold train+ inference 구현하기
+SM: k-fold를 구현하긴 했으나, 추천하지 않음. 오래 걸리며, 아직 k-fold에 대한 Sampler가 검증되지 않았음.
 """
 
 def kfold_train(data_dir, model_dir, args):
@@ -329,7 +335,7 @@ def kfold_train(data_dir, model_dir, args):
     model = torch.nn.DataParallel(model)
 
     # -- loss & metric & optimizer
-    criterion = create_criterion(args.criterion, classes = dataset.num_classes)  # default: cross_entropy
+    criterion = create_criterion(args.criterion)  # default: cross_entropy
     opt_module = getattr(import_module("torch.optim"), args.optimizer)  # default: SGD
     optimizer = opt_module(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -356,6 +362,7 @@ def kfold_train(data_dir, model_dir, args):
         val_set = Subset(dataset, val_idx)
         global_train_losses = []
         global_train_accs = []
+        
 
 
         best_val_acc = 0
@@ -391,6 +398,7 @@ def kfold_train(data_dir, model_dir, args):
             loss_value = 0
             matches = 0
             for idx, train_batch in enumerate(train_loader):
+                
                 inputs, labels = train_batch
                 inputs = inputs.to(device)
                 labels = labels.to(device)
@@ -496,10 +504,10 @@ if __name__ == '__main__':
 
     #Initialize data and model class
     parser.add_argument('--dataset', type=str, default="MaskBaseDataset", help='Which dataset will you use?')
-    parser.add_argument("--model", type = str, default = "EfficientV2", help = "Which model will you use?")
+    parser.add_argument("--model", type = str, default = "EfficientB4", help = "Which model will you use?")
 
     #Augmentation and optimizer and Loss
-    parser.add_argument('--augmentation', type=str, default='BaseAugmentation', help='data augmentation type (default: BaseAugmentation)')
+    parser.add_argument('--augmentation', type=str, default='CustomAugmentation', help='data augmentation type (default: BaseAugmentation)')
     parser.add_argument('--optimizer', type=str, default='Adam', help='optimizer type (default: SGD)')
     parser.add_argument('--criterion', type=str, default='cross_entropy', help='criterion type (default: cross_entropy)')
 
@@ -508,27 +516,31 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 5)')
 
     #이미지 사이즈를 (128,96)으로 놓은 이유가 있을까
-    parser.add_argument("--resize", nargs="+", type=list, default=[228, 228], help='resize size for image when training')
+    parser.add_argument("--resize", nargs="+", type=list, default=[380, 380], help='resize size for image when training')
     #parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
-    parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
-    parser.add_argument('--valid_batch_size', type=int, default=1000, help='input batch size for validing (default: 1000)')
-    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
+    parser.add_argument('--batch_size', type=int, default=32, help='input batch size for training (default: 64)')
+    parser.add_argument('--valid_batch_size', type=int, default=256, help='input batch size for validing (default: 1000)')
+    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-3)')
     parser.add_argument('--val_ratio', type=float, default=0.2, help='ratio for validaton (default: 0.2)')
-    parser.add_argument('--lr_decay_step', type=int, default=20, help='learning rate scheduler deacy step (default: 20)')
+    parser.add_argument('--lr_decay_step', type=int, default=5, help='learning rate scheduler deacy step (default: 20)')
     parser.add_argument('--log_interval', type=int, default=20, help='how many batches to wait before logging training status')
     parser.add_argument('--name', default='exp', help='model save at {SM_MODEL_DIR}/{name}')
 
 
     #CutMix 여부
     parser.add_argument('--cutmix', type =str, default='no', help='Cutmix or not?')
+    parser.add_argument('--cutmix_prob', type =float, default=0.5, help='How much?')
 
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
 
+
+    #터미널 창에 argument를 더하면, parser.parse_args( )를 통해 argument들을 딕셔너리 형태로 받음(args.attribute로 속성 접근 가능)
     args = parser.parse_args()
     print(args)
+    print("CUTMIX??:", args.cutmix)
 
     data_dir = args.data_dir
     model_dir = args.model_dir
@@ -536,5 +548,5 @@ if __name__ == '__main__':
 
     #Change if you want to do kfold or not
     
-    #train(data_dir, model_dir, args)
-    kfold_train(data_dir, model_dir, args)
+    train(data_dir, model_dir, args)
+    #kfold_train(data_dir, model_dir, args)
