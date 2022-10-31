@@ -1,3 +1,5 @@
+## validation 도 학습하는 코드. 1,2,3번 주석 찾아서 추가하면 됩니다.
+
 import argparse
 import glob
 import json
