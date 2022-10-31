@@ -568,7 +568,7 @@ class CutMixDataset(MaskSplitByProfileDataset):
 
         #Added : 각 class_idx 별 indices를 저장하고자 함
         self.class_idx = [[] for i in range(18)]
-        self.phases = []
+        self.istrain = []
         super().__init__(data_dir, mean, std, val_ratio)
         
         
@@ -605,7 +605,7 @@ class CutMixDataset(MaskSplitByProfileDataset):
                     multi_class = self.encode_multi_class(mask_label,gender_label,age_label)
 
                     self.class_idx[multi_class].append(cnt)
-                    self.phases.append(phase)
+                    self.istrain.append(phase)
 
                     self.indices[phase].append(cnt)
                     cnt += 1
