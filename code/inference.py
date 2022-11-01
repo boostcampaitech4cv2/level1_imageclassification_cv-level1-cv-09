@@ -72,7 +72,7 @@ def inference(data_dir, model_dir, output_dir, args):
                 preds.extend(pred.cpu().numpy())
 
         info['ans'] = preds
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
         print(f"Inference Done! Inference result saved at {save_path}")
     
@@ -131,7 +131,7 @@ def inference(data_dir, model_dir, output_dir, args):
             final_predictions.append(final_label)
             
         info['ans'] = final_predictions
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
 
         tempfile = pd.DataFrame()
@@ -190,7 +190,7 @@ def kfold_inference(data_dir, model_dir, output_dir, args):
                 preds.extend(pred.cpu().numpy())
 
         info['ans'] = preds
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
         print(f"Inference Done! Inference result saved at {save_path}")
     
@@ -265,7 +265,7 @@ def kfold_inference(data_dir, model_dir, output_dir, args):
             final_predictions.append(final_label)
             
         info['ans'] = final_predictions
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
 
         tempfile = pd.DataFrame()
@@ -297,6 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_EVAL', '/opt/ml/input/data/eval'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_CHANNEL_MODEL', './model/exp'))
     parser.add_argument('--output_dir', type=str, default=os.environ.get('SM_OUTPUT_DATA_DIR', './output'))
+    parser.add_argument('--output_name', type=str, default='output.csv')
 
     #For Three-way branch training
     #To activate three-way training, set --single = False in CLI environment
