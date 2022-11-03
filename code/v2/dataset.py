@@ -45,11 +45,18 @@ mean, std : ImageNet pretrained model에 쓰인 기본값
 이미지넷 데이터의 mean,std가 안리ㅏ 우리의 데이터의 mean,std ===> 그렇게 실험을 한 기록이 있었습니다 지난 기수 때도 한번 해보세요! 
 """
 class BaseAugmentation:
-    def __init__(self, resize=[380, 380], mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246)):
-        self.transform = Compose([
+    def __init__(self, resize=[380, 380], mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971)):
+        # self.transform = Compose([
+        #     ToTensor(),
+        #     FaceNet(size=resize),          #FaceNet : CenterCrop과 비슷한 역할을 하는 Augmentation 라이브러리
+        #     Normalize(mean=mean, std=std)							   
+        # ])
+
+        self.transform = Compose([					   							 
+            CenterCrop([320,260]),
+            Resize(resize),
             ToTensor(),
-            FaceNet(size=resize),          #FaceNet : CenterCrop과 비슷한 역할을 하는 Augmentation 라이브러리
-            Normalize(mean=mean, std=std)							   
+            Normalize(mean=mean, std=std)
         ])
 
     def __call__(self, image):
@@ -131,9 +138,17 @@ CustomAugmentation
 """
 class CustomAugmentation:
     def __init__(self, resize, mean, std, **args):
+        # self.transform = Compose([					   							 
+        #     ToTensor(),
+        #     FaceNet(size=resize),
+        #     RandomErasing(p=1, scale=(0.05,0.05), ratio=(0.5,1)),
+        #     Normalize(mean=mean, std=std)
+        # ])
+
         self.transform = Compose([					   							 
+            CenterCrop([320,260]),
+            Resize(resize),
             ToTensor(),
-            FaceNet(size=resize),
             RandomErasing(p=1, scale=(0.05,0.05), ratio=(0.5,1)),
             Normalize(mean=mean, std=std)
         ])
@@ -214,6 +229,7 @@ class MaskBaseDataset(Dataset):
     num_classes = 3 * 2 * 3
 
     _file_names = {
+        "mask0": MaskLabels.MASK,
         "mask1": MaskLabels.MASK,
         "mask2": MaskLabels.MASK,
         "mask3": MaskLabels.MASK,
@@ -224,7 +240,7 @@ class MaskBaseDataset(Dataset):
     }
 
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, age_removal = False):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2, age_removal = False):
         self.data_dir = data_dir
         self.mean = mean
         self.std = std
@@ -261,6 +277,10 @@ class MaskBaseDataset(Dataset):
 
                 id, gender, race, age = profile.split("_")
 
+                age_label = AgeLabels.from_number(age)
+                gender_label = GenderLabels.from_str(gender)
+
+
                 #추가 :: Age removal
                 """
                 경계선에 있는 값들은 예측하기 어렵다.
@@ -268,12 +288,10 @@ class MaskBaseDataset(Dataset):
                 경우에 따라, 경계선에 있는 데이터들을 제거해볼 수 있다.
                 """
                 if self.age_removal:
-                    if (27<=int(age)<=29) or (57<=int(age)<=59) :
-                        continue
+                    if (28<=int(age)<=29) or (57<=int(age)<=59) : continue
+                    # elif int(age) == 59  : age_label = AgeLabels.from_number('60')
                 #추가 끝
 
-                gender_label = GenderLabels.from_str(gender)
-                age_label = AgeLabels.from_number(age)
 
                 self.image_paths.append(img_path)
                 self.mask_labels.append(mask_label)
@@ -378,7 +396,7 @@ SM:
 """
 
 class TestDataset(Dataset):
-    def __init__(self, img_paths, resize , mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), tta = False):
+    def __init__(self, img_paths, resize , mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), tta = False):
         self.img_paths = img_paths
         self.tta = tta
 
@@ -388,7 +406,8 @@ class TestDataset(Dataset):
                 Resize(resize, Image.BILINEAR),
                 ToTensor(),
                 Normalize(mean=mean, std=std),
-            ])
+            ]) ### 바꿔야될수도
+            
         else:
             self.transform = BaseAugmentation()
 
@@ -432,7 +451,7 @@ class MaskSplitByProfileDataset(MaskBaseDataset):
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, age_removal = False):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2, age_removal = False):
         self.indices = defaultdict(list)
         super().__init__(data_dir, mean, std, val_ratio, age_removal)
 
@@ -566,7 +585,7 @@ class CutMixDataset(MaskSplitByProfileDataset):
     MaskSplitByProfileDataset에 Cutmix를 적용한다.
     """
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2, age_removal = False):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2, age_removal = False):
         self.indices = defaultdict(list)
 
         #Added : 각 class_idx 별 indices를 저장하고자 함
@@ -662,7 +681,7 @@ SM : 밑의 3-way branch들은 추가작업이 필요하며, 아직 검증되지
 class MaskProfileOnlyDataset(MaskSplitByProfileDataset):
     num_classes = 3
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2):
         super().__init__(data_dir)
         
                     
@@ -682,7 +701,7 @@ class MaskProfileOnlyDataset(MaskSplitByProfileDataset):
 class AgeProfileOnlyDataset(MaskSplitByProfileDataset):
     num_classes = 3
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2):
         super().__init__(data_dir)
                             
     def __getitem__(self, index):
@@ -701,7 +720,7 @@ class AgeProfileOnlyDataset(MaskSplitByProfileDataset):
 class GenderProfileOnlyDataset(MaskSplitByProfileDataset):
     num_classes = 2
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2):
         super().__init__(data_dir, mean, std, val_ratio)
                             
     def __getitem__(self, index):
@@ -727,7 +746,7 @@ class MaskCutMixProfileDataset(MaskSplitByProfileDataset):
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2):
         self.indices = defaultdict(list)
         #Added
         self.class_idx = [[] for i in range(18)]
@@ -808,7 +827,7 @@ class AgeCutMixProfileDataset(MaskSplitByProfileDataset):
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2):
         self.indices = defaultdict(list)
         #Added
         self.class_idx = [[] for i in range(18)]
@@ -892,7 +911,7 @@ class GenderCutMixProfileDataset(MaskSplitByProfileDataset):
         이후 `split_dataset` 에서 index 에 맞게 Subset 으로 dataset 을 분기합니다.
     """
 
-    def __init__(self, data_dir, mean=(0.548, 0.504, 0.479), std=(0.237, 0.247, 0.246), val_ratio=0.2):
+    def __init__(self, data_dir, mean=(0.2063, 0.1772, 0.1677), std=(0.3497, 0.3085, 0.2971), val_ratio=0.2):
         self.indices = defaultdict(list)
         #Added
         self.class_idx = [[] for i in range(18)]

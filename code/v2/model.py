@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from inference import load_model
+import torch
+import os
 
 class BaseModel(nn.Module):
     def __init__(self, num_classes):
@@ -121,10 +123,14 @@ class Vit_B_16(nn.Module):
 class EfficientB4_pretrained(nn.Module):
     def __init__(self, num_classes = 18):
         super(EfficientB4_pretrained, self).__init__()
-        self.effnet = torchvision.models.efficientnet_b4(pretrained = True)
-        in_features = self.effnet.classifier[1].in_features
-        self.effnet.classifier[1] = nn.Linear(in_features , num_classes)
+        self.model = EfficientB4(num_classes=num_classes)
+
+        model_path = os.path.join('/opt/ml/code/v2/model/exp43','best.pth')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.model.load_state_dict(torch.load(model_path, map_location=device))
+
 
     def forward(self, x):
-        x = self.effnet(x)
+        x = self.model(x)
         return x
