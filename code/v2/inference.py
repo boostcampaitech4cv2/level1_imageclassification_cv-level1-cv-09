@@ -171,7 +171,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    assert args.resize is not None, "Resize를 꼭 지정해주시고 반드시 반드시반드시 반드시 Train과 동일하게 지정해주세요!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    assert args.resize is not None, "Resize를 꼭 지정해주시고 반드시 반드시반드시 반드시 Train과 동일하게 지정해주세요!!!!!!!"
 
     data_dir = args.data_dir
     model_dir = args.model_dir
@@ -181,7 +181,5 @@ if __name__ == '__main__':
 
     print(args)
     print("잠깐! 혹시 inference의 resize가 train과 맞는지 확인하셨나요?")
-    #Change if you want to do kfold, or just use inference
     inference(data_dir, model_dir, output_dir, args)
-    #kfold_inference(data_dir, model_dir, output_dir, args)
     print("됐습니다! 혹시 inference의 resize가 train과 맞는지 확인하셨나요?")

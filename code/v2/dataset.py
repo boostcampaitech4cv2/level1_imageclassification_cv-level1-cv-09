@@ -3,28 +3,25 @@ import random
 from collections import defaultdict
 from enum import Enum
 from typing import Tuple, List
-from random import randint
 
 import numpy as np
 import torch
 import PIL
 from PIL import Image
-from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler, DataLoader
+from torch.utils.data import Dataset, Subset, random_split, WeightedRandomSampler
 
 
 #Augmentation을 위한 torchvision import
 import torchvision
 from torchvision import transforms
-from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop, ColorJitter, RandomErasing, RandomHorizontalFlip
+from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop, RandomErasing, RandomHorizontalFlip
 
 #utils.py에서 rand_bbox, cutmix 함수를 가져옴
-from utils import rand_bbox, cutmix
+from utils import cutmix
 
 
 #facenet_pytorch, cv2(opencv)는 pip을 통해 별도로 설치가 필요함
-#하단 주석 참고
 from facenet_pytorch import MTCNN
-import cv2
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
