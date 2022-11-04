@@ -3,6 +3,3 @@ SM_CHANNEL_EVAL="/opt/ml/input/data/eval" SM_CHANNEL_MODEL="model/exp53" SM_OUTP
 python inference.py --model EfficientB4 \
 --single True \
 --tta True
-# --age_dir "saved_models/joint_exp/age49" \
-# --gender_dir "saved_models/joint_exp/gender22" \
-# --mask_dir "saved_models/joint_exp/mask23"
