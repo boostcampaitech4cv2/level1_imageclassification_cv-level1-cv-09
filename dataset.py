@@ -7,9 +7,8 @@ from typing import Tuple, List
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import Dataset, Subset, random_split
-from torchvision.transforms import Resize, ToTensor, Normalize, Compose, CenterCrop
-from torchvision.transforms import ColorJitter, RandomHorizontalFlip, RandomRotation
+from torch.utils.data import *
+from torchvision.transforms import *
 
 IMG_EXTENSIONS = [
     ".jpg", ".JPG", ".jpeg", ".JPEG", ".png",
@@ -32,7 +31,13 @@ class BaseAugmentation:
     def __call__(self, image):
         return self.transform(image)
 
+
 class AddGaussianNoise(object):
+    """
+        transform 에 없는 기능들은 이런식으로 __init__, __call__, __repr__ 부분을
+        직접 구현하여 사용할 수 있습니다.
+    """
+
     def __init__(self, mean=0., std=1.):
         self.std = std
         self.mean = mean
@@ -42,37 +47,6 @@ class AddGaussianNoise(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
-
-class Add__Noise(object):
-    def __init__(self, mean=0., std=1.):
-        self.std = std
-        self.mean = mean
-
-    def __call__(self, tensor):
-        #####
-        return
-
-    def __repr__(self):
-        #####
-        return
-
-    
-### --------- acc : 73.86%, loss:  0.2 --------- ###
-
-class Custom_BaseAugmentation :
-    def __init__(self, resize, mean, std, **args) :
-        self.transform = Compose([
-            Resize(resize, Image.BILINEAR),
-            RandomHorizontalFlip(),
-            ColorJitter(0.1, 0.1, 0.1, 0.1),
-            ToTensor(),
-            Normalize(mean=mean, std=std)
-        ])
-
-    def __call__(self, image) :
-        return self.transform(image)
-    
-### ------------------- copy ------------------- ###
 
 
 class CustomAugmentation:
@@ -84,6 +58,31 @@ class CustomAugmentation:
             ToTensor(),
             Normalize(mean=mean, std=std),
             AddGaussianNoise()
+        ])
+
+    def __call__(self, image):
+        return self.transform(image)
+
+
+from RandAugment import *
+
+transforms = [
+    RandomHorizontalFlip,
+    Custom_equalize,
+    Custom_solarize,
+    # Custom_color
+]
+
+class Custom_RandAugment:
+    def __init__(self, resize, mean, std, **args) :
+        self.select = np.random.choice(transforms, 1)
+
+        self.transform = Compose([
+            Resize(resize, Image.BILINEAR),
+            self.select[0](),
+            # self.select[1](),
+            ToTensor(),
+            Normalize(mean=mean, std=std),
         ])
 
     def __call__(self, image):
