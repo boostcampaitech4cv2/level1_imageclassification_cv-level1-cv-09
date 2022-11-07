@@ -48,7 +48,7 @@ def get_lr(optimizer):
         return param_group['lr']
 
 """
-이미지 plot하는 함수
+이미지를 plot하는 함수
 """
 
 def grid_image(np_images, gts, preds, n=16, shuffle=False):
