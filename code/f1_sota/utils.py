@@ -32,14 +32,6 @@ def rand_bbox(size, lam):
     W = size[-2]  # C x W x H  (3D) or B x C x W x H (4D)
     H = size[-1]
 
-    #cut_rat = np.sqrt(1. - lam)
-    #cut_w = np.int(W * cut_rat)
-    #cut_h = np.int(H * cut_rat)
-
-    # uniform
-    #cx = np.random.randint(W)
-    #cy = np.random.randint(H)
-
     bbx1 = np.clip(0,0,W)
     bby1 = np.clip(int(lam*H),0,H)
     bbx2 = np.clip(W,0,W)
@@ -84,6 +76,7 @@ def remove_strange_files():
             if file.startswith('._'):
                 os.remove(file_path)
                 print(f'removed {file_path}')
+
 
 def copy_files_to_upper_dir():
     dir_path = os.path.dirname("/opt/ml/input/data/train/images/")

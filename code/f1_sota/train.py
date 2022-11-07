@@ -16,7 +16,6 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
-from sklearn.model_selection import KFold, StratifiedKFold
 
 
 from dataset import MaskBaseDataset, BaseAugmentation
@@ -41,11 +40,6 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
     random.seed(seed)
-
-
-'''
-???
-'''
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
@@ -323,12 +317,6 @@ def train(data_dir, model_dir, args):
             print()
 
 
-"""
-SM: k-fold를 구현하긴 했으나, 추천하지 않음. 오래 걸리며, 아직 k-fold에 대한 Sampler가 검증되지 않았음.
-"""
-
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -347,7 +335,6 @@ if __name__ == '__main__':
 
     #이미지 사이즈를 (128,96)으로 놓은 이유가 있을까
     parser.add_argument("--resize", nargs="+", type=list, default=[380, 380], help='resize size for image when training')
-    #parser.add_argument("--resize", nargs="+", type=list, default=[128, 96], help='resize size for image when training')
     parser.add_argument('--batch_size', type=int, default=32, help='input batch size for training (default: 64)')
     parser.add_argument('--valid_batch_size', type=int, default=256, help='input batch size for validing (default: 1000)')
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-3)')
@@ -356,28 +343,22 @@ if __name__ == '__main__':
     parser.add_argument('--log_interval', type=int, default=20, help='how many batches to wait before logging training status')
     parser.add_argument('--name', default='exp', help='model save at {SM_MODEL_DIR}/{name}')
 
-
     #CutMix 여부
     parser.add_argument('--cutmix', type =str, default='no', help='Cutmix or not?')
     parser.add_argument('--cutmix_prob', type =float, default=0.5, help='How much?')
     parser.add_argument('--cutmix_lower', type =float, default=0.5, help='lower_bound')
     parser.add_argument('--cutmix_upper', type =float, default=0.5, help='upper_bound')
 
-
-
     # val 관련 arguement 추가
     parser.add_argument('--val_train', type=str, default = 'false', help = 'if u want to train ur validation data too -> true')
     parser.add_argument('--val_epochs', type=int, default = '2', help = 'how much epochs do u want to train ur valdata')
 
-
     # age_removal 관련 argument 추가
     parser.add_argument('--age_removal', type=str_to_bool, nargs='?', default=False)
-
 
     # Container environment
     parser.add_argument('--data_dir', type=str, default=os.environ.get('SM_CHANNEL_TRAIN', '/opt/ml/input/data/train/images'))
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', './model'))
-
 
     #터미널 창에 argument를 더하면, parser.parse_args( )를 통해 argument들을 딕셔너리 형태로 받음(args.attribute로 속성 접근 가능)
     args = parser.parse_args()
@@ -386,9 +367,5 @@ if __name__ == '__main__':
 
     data_dir = args.data_dir
     model_dir = args.model_dir
-
-
-    #Change if you want to do kfold or not
     
     train(data_dir, model_dir, args)
-    #kfold_train(data_dir, model_dir, args)
