@@ -27,6 +27,13 @@ from utils import rand_bbox, cutmix_plot, cutmix
 import warnings
 warnings.filterwarnings('ignore')
 
+########## [1]  WANDB 기능 추가 ########################
+
+from wandb_experiment import ExperimentWandb
+
+
+############WANDB 기능 추가########################
+
 
 """
 시드를 고정하는 함수
@@ -187,6 +194,18 @@ def train(data_dir, model_dir, args):
     if args.val_train.lower() == 'true':
         train_epochs = args.epochs - args.val_epochs
 
+    ### [2] WANDB 로그인 코드 추가###############
+
+    wandb = ExperimentWandb()
+    wandb.set_project_name(f"Experiment Note ")
+
+    config_dict = vars(args)
+    wandb.set_hyperparams(config_dict)
+    wandb.config(vars(args))
+
+    ###########################################
+
+
 
     """
     추가) Early stopping을 적용하기 위해, 정확도를 확인!
@@ -265,6 +284,13 @@ def train(data_dir, model_dir, args):
             val_acc_items = []
             figure = None
 
+            ############## WANDB 2-1 : 새로운 기능을 추가  ################
+            label_predictions = np.arange(num_classes)
+            label_ground_truths = np.arange(num_classes)
+            wrong_predictions = []
+            ##############################################################
+
+
             for val_batch in val_loader:
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
@@ -284,6 +310,22 @@ def train(data_dir, model_dir, args):
                     figure = grid_image(
                         inputs_np, labels, preds, n=16, shuffle= args.dataset != "MaskSplitByProfileDataset"
                     )
+
+                ################ WANDB 2-2 : 새로운 기능을 추가(2-1에 이어집니다) ####################
+                for image, label, pred in zip(inputs.cpu().numpy(), labels.cpu().detach().numpy(), preds.cpu().detach().numpy()):
+                    
+                    # 어쨌거나 전체 label엔 추가
+                    label_ground_truths[label] +=1 
+
+                    #맞으면 추가
+                    if label == pred : 
+                        label_predictions[label] +=1
+                    else: 
+                        wrong_predictions.append(  (image, pred, label) )
+                ####################################################################################
+
+
+
 
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
@@ -306,6 +348,15 @@ def train(data_dir, model_dir, args):
                 print(f"New best model for val accuracy : {val_acc:4.2%}! saving the best model..")
                 torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
                 best_val_acc = val_acc
+
+                ############### Wandb 2-3 . Best prediction getting ###########################
+                best_prediction = label_predictions 
+                best_gt = label_ground_truths
+                best_wrong_predictions = wrong_predictions
+                ###############################################################################
+
+
+
             torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
@@ -315,6 +366,23 @@ def train(data_dir, model_dir, args):
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
             print()
+
+            ################ Wandb 2-4 . Graph add  ######################################
+            wandb.check_all_accuracy(label_predictions, label_ground_truths)
+            wandb.log({"Val/loss" : val_loss, "Val/Acc" : val_acc})
+            ##########################################################################
+        
+        #### Wandb 3. Best model ideas!
+        wandb.plot_best_accuracy(best_prediction, best_gt)
+        wandb.log_miss_label(best_wrong_predictions)
+    wandb.finish()
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
