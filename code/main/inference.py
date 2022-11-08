@@ -62,15 +62,96 @@ def inference(data_dir, model_dir, output_dir, args):
 
         print("Calculating inference results..")
         preds = []
+        imageID = []
+        index_ = []
+        best1 = []
+        best2 = []
+        my_best1 = []
+        my_best2 = []
+        my_val1 = []
+        my_val2 = []
+        mis_age_set = {2,5,8,11,14,17}
+        diff = pd.read_csv("/opt/ml/diff.csv")
+        diff_set = set()
+        for i in diff.index:
+            diff_set.add(diff.loc[i]['index'])
+
+        diff_idx = 0
+        total_idx=0
         with torch.no_grad():
             for idx, images in enumerate(loader):
                 images = images.to(device)
                 pred = model(images)
-                pred = pred.argmax(dim=-1)
-                preds.extend(pred.cpu().numpy())
+                values, indices = torch.topk(pred, 2, -1)
 
+            #     #best2개와 비교
+            #     for value, index in zip(values, indices):
+            #         value = value.tolist()
+            #         index = index.tolist()
+            #         if diff_idx>=len(diff): break
+            #         loc = diff.loc[diff_idx]
+            #         if total_idx == loc["index"]:
+            #             print(total_idx, value, index)
+            #             imageID.append(loc["ImageID"])
+            #             index_.append(total_idx)
+            #             best1.append(loc["best1"])
+            #             best2.append(loc["best2"])
+            #             my_best1.append(index[0])
+            #             my_best2.append(index[1])
+            #             my_val1.append(value[0])
+            #             my_val2.append(value[1])
+            #             diff_idx+=1
+            #         total_idx+=1
+
+                
+                #차이 x이하 저장
+                x = 0.3
+                pred = []
+                cnt = 0
+                for value, index in zip(values, indices):
+                    value = value.tolist()
+                    index = index.tolist()
+
+                    if (total_idx in diff_set) &\
+                        (value[0]-value[1]<=x) &\
+                        (index[0] in mis_age_set) &\
+                        (index[0] - index[1] == 1):
+                        print(total_idx, index[0], index[1], value[0], value[1])
+                        index_.append(total_idx)
+                        my_best1.append(index[0])
+                        my_best2.append(index[1])
+                        my_val1.append(value[0])
+                        my_val2.append(value[1])
+                        pred.append(index[1])
+                        cnt+=1
+                    else :
+                        pred.append(index[0])
+                    total_idx+=1
+                
+                # pred = pred.argmax(dim=-1)
+                pred = torch.tensor(pred)
+                preds.extend(pred.cpu().numpy())
+        
+        # pds = pd.DataFrame({'ImageID':Series(imageID),
+        #                     'index':Series(index_),
+        #                     'best1':Series(best1),
+        #                     'best2':Series(best2),
+        #                     'my_best1':Series(my_best1),
+        #                     'my_best2':Series(my_best2),
+        #                     'my_val1':Series(my_val1),
+        #                     'my_val2':Series(my_val2),})
+        # pds.to_csv('compare_with_best_two.csv', index=False)
+        
+        
+        # pds = pd.DataFrame({'index':Series(index_),
+        #                     'my_best1':Series(my_best1),
+        #                     'my_best2':Series(my_best2),
+        #                     'my_val1':Series(my_val1),
+        #                     'my_val2':Series(my_val2),})
+        # pds.to_csv(f'gap_under_{x}.csv', index=False)
+        
         info['ans'] = preds
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
         print(f"Inference Done! Inference result saved at {save_path}")
     
@@ -129,7 +210,7 @@ def inference(data_dir, model_dir, output_dir, args):
             final_predictions.append(final_label)
             
         info['ans'] = final_predictions
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
 
         tempfile = pd.DataFrame()
@@ -167,6 +248,7 @@ if __name__ == '__main__':
     parser.add_argument("--age_dir", type=str, default = "/saved_models/joint_exp/age")
     parser.add_argument("--gender_dir", type=str, default = "/saved_models/joint_exp/gender")
     parser.add_argument("--mask_dir", type=str, default = "/saved_models/joint_exp/mask")
+    parser.add_argument('--output_name', type=str, default='output.csv')
 
     #Will you do tta???
     parser.add_argument('--tta', type=str_to_bool, nargs='?', const=True, default=False)
