@@ -10,13 +10,17 @@ from torch.utils.data import DataLoader
 from utils import str_to_bool
 from dataset import TestDataset, MaskBaseDataset
 
+import torch.nn as nn
+
 import warnings
 warnings.filterwarnings('ignore')
+
+FOLD_NUM = 5
 
 def load_model(saved_model, num_classes, device):
     model_cls = getattr(import_module("model"), args.model)
     model = model_cls(
-        num_classes=num_classes
+            num_classes=num_classes
     )
 
     # tarpath = os.path.join(saved_model, 'best.tar.gz')
@@ -50,7 +54,7 @@ def inference(data_dir, model_dir, output_dir, args):
         model.eval()
 
         img_paths = [os.path.join(img_root, img_id) for img_id in info.ImageID]
-        dataset = TestDataset(img_paths, args.resize, tta = args.tta)
+        dataset = TestDataset(img_paths, args.resize, tta= args.tta)
         loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=args.batch_size,
@@ -62,15 +66,26 @@ def inference(data_dir, model_dir, output_dir, args):
 
         print("Calculating inference results..")
         preds = []
+
         with torch.no_grad():
             for idx, images in enumerate(loader):
                 images = images.to(device)
-                pred = model(images)
-                pred = pred.argmax(dim=-1)
+
+                if args.arcface: 
+                    outs, _ = model(images, label=None, training=False) 
+
+                    output = nn.Softmax()(outs)
+                    _, pred = torch.topk(output, 1)
+                    pred = pred.squeeze()                     
+                else: 
+                    pred = model(images)
+                    pred = torch.argmax(pred, dim=-1)
+                
                 preds.extend(pred.cpu().numpy())
 
         info['ans'] = preds
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_num = args.save_num 
+        save_path = os.path.join(output_dir, f'output{save_num}.csv')
         info.to_csv(save_path, index=False)
         print(f"Inference Done! Inference result saved at {save_path}")
     
@@ -106,8 +121,16 @@ def inference(data_dir, model_dir, output_dir, args):
             with torch.no_grad():
                 for idx, images in enumerate(loader):
                     images = images.to(device)
-                    pred = model(images)
-                    pred = pred.argmax(dim=-1)
+                    if args.arcface: 
+                        outs, _ = model(images, label=None, training=False) 
+
+                        output = nn.Softmax()(outs)
+                        _, pred = torch.topk(output, 1)
+                        pred = pred.squeeze()                     
+                    else: 
+                        pred = model(images)
+                        pred = torch.argmax(pred, dim=-1)
+                    
                     preds.extend(pred.cpu().numpy())
 
             if order == 0:
@@ -143,18 +166,17 @@ def inference(data_dir, model_dir, output_dir, args):
         print(f"Inference Done! Inference result saved at {save_path}")
         print(f"Other file is also done. Saved at {save_other_path}")
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     #Joint training, or single training?
-    parser.add_argument('--single', type=str_to_bool, nargs='?', const=True, default=False)
+    parser.add_argument('--single', type=str_to_bool, nargs='?', default=False)
 
     # Data and model checkpoints directories
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for validing (default: 1000)')
     
     # parser.add_argument('--resize', type=tuple, help='resize size for image when you trained (default: (96, 128))')
-    parser.add_argument('--resize', type=tuple, default=(380, 380), help='resize size for image when you trained (default: (96, 128))')
+    parser.add_argument('--resize', type=tuple, default=(224, 224), help='resize size for image when you trained (default: (96, 128))')
     parser.add_argument('--model', type=str, default='BaseModel', help='model type (default: BaseModel)')
 
     # Container environment
@@ -171,7 +193,13 @@ if __name__ == '__main__':
     #Will you do tta???
     parser.add_argument('--tta', type=str_to_bool, nargs='?', const=True, default=False)
 
+    ############################ arcface loss 추가부분 ############################
+    parser.add_argument('--arcface', type=bool, default=False)
+    parser.add_argument('--save_num', type=str, default='1')
+    ############################ arcface loss 추가부분 ############################
+
     args = parser.parse_args()
+    print(args)
 
 
     assert args.resize is not None, "Resize를 꼭 지정해주시고 반드시 반드시반드시 반드시 Train과 동일하게 지정해주세요!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -182,7 +210,8 @@ if __name__ == '__main__':
 
     os.makedirs(output_dir, exist_ok=True)
 
-    print(args)
     print("잠깐! 혹시 inference의 resize가 train과 맞는지 확인하셨나요?")
+    #Change if you want to do kfold, or just use inference
     inference(data_dir, model_dir, output_dir, args)
+    #kfold_inference(data_dir, model_dir, output_dir, args)
     print("됐습니다! 혹시 inference의 resize가 train과 맞는지 확인하셨나요?")
