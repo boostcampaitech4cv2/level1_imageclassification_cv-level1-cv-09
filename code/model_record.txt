@@ -1,0 +1,98 @@
+#Exp1 : F1 0.56, Acc : 65.6, Eff-net, 10-epochs, and other base options
+## 일반 loss로 학습 
+age9, gender7, mask7
+
+#Exp2 : F1 0.557, Acc 64.61, Eff-net, 10-epochs, and other base options
+## F1-loss로 학습
+age10, gender9, mask9
+
+#Exp3 : F1 0.567, Acc 65.41 Eff-net, 10-epochs, and other base options
+## Labelsmooth-loss로 학습
+age11, gender10, mask10
+
+#Exp4(Failure) : F1 0.046, Acc 12.-7
+- 데이터가 부족하거나, 구현이 잘못되었거나.
+- Dataset를 구분하였으므로, 거기서부터 잘못되었을 가능성이 있음.
+
+#Exp5(???) : F1 ???? , Acc ???
+- CustomAugmentation을 적용
+- Profile을 custom하여 적용
+- 그러나 여전히 overfitting같음. 
+- 내일 제출 기회가 남으면 제출해보자구!
+- age19, gender14, mask12
+
+#Exp6(Failure) : F1 0.02, Acc 3.63
+- Profile을 custom하여 적용
+- 아무리봐도 Dataset 구현오류라고 생각한다.
+- age21, gender16, mask13
+
+#Exp7()
+- 원래 잘 됐던 GenderDataset을 이용하였다
+- BaseDataset을 잘못 정의한 부분이 문제라고 생각했다.
+- 그렇다고 해봤자 len이 바뀐것뿐인데, 뭐가 달라질까?
+- 이번에도 첫 prediction값이 13이 아니라면 하지 말자.(12 그런 식이라면..
+===> 완전히 같음
+
+-Bad_pattern은 따로 저장하자
+- age22, gender17, mask14 ==> 안 될 것같음
+
+
+--age_dir "saved_models/joint_exp/age21" \
+--gender_dir "saved_models/joint_exp/gender16" \
+--mask_dir "saved_models/joint_exp/mask20"
+
+#Exp8 - kfold test
+--age_dir "saved_models/joint_exp/age31" \
+--gender_dir "saved_models/joint_exp/gender18" \
+--mask_dir "saved_models/joint_exp/mask20"
+
+
+#Exp9 - Sampler 첫 이용!  성능이 궁금해 지금 csv 구현하는 코드 쓰고 있음. :: F10.25 acc 0.23
+## 왜 안나왔을까? 
+
+- age40
+- gender19
+- mask21 
+
+#Exp10 - CutMix를 이용! 근데 GetItem떄 하니까 좀 불편하다.  F1 0.1643	Acc 24.1905 왜 이리 나왔을까?
+
+AgeCutMixProfileDataset <-여기다 했음. 아무리 봐도 오버피팅같은데 얘네들
+-age43 
+-gender20 
+-mask22
+
+#Exp11 - 첫 EffNetb2 
+-age49 
+-gender22
+-mask23
+
+#Exp12 - Single EffNetb2 + MaskProfileDataset + (27,29), (57,59) 제외 + WeightedSampler사용
+-F1 0.24, Acc 0.37
+
+#Exp13 - Single EffNetb2 + MaskProfileDataset 
+-F1 0.22, Acc 0.34 
+ 
+#Exp14 - CutMixDataset + (27,29), (57,59)제외 + 
+-exp42 
+
+
+"""
+
+""'
+
+exp40 - 그냥 Efficient 기준  Acc 72 F1 0.66 (age49 + gender22, mask23)
+
+
+
+exp44 - cutmix 기준 :: Acc 74 F1 0.68
+exp44 - cutmix + TTA 기준 ::  F1 0.77 Acc 81
+
+exp55 - Eff4 + Cutmix train  F1 0.66, Acc 73.2 
+exp55 - Eff4 + CUtMix train +TTA  F1 0.74, Acc 79.93
+
+
+
+#Further-to-do 
+* Cut-Mix 구현 
+* Data Correction : 20%나 잘못되었으니...
+
