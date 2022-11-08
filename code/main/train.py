@@ -27,13 +27,7 @@ from utils import rand_bbox, cutmix_plot, cutmix, str_to_bool
 from utils import cal_loss
 import torch.nn as nn 
 
-wandb.init(project="221028", entity="byeol5832")
-
-wandb.config = {
-  "learning_rate": 0.001,
-  "epochs": 10,
-  "batch_size": 64
-}
+from wandb_experiment import ExperimentWandb
 
 ## seed
 def seed_everything(seed):
@@ -175,6 +169,15 @@ def train_loop(data_dir, model_dir, args):
     if args.val_train.lower() == 'true':
         train_epochs = args.epochs - args.val_epochs
 
+    # - wandb config 
+    wandb = ExperimentWandb()
+    wandb.set_project_name(f"Experiment Note ")
+
+    config_dict = vars(args)
+    wandb.set_hyperparams(config_dict)
+    wandb.config(vars(args))
+
+
     patience_limit = 12
     patience_check = 0
 
@@ -251,6 +254,11 @@ def train_loop(data_dir, model_dir, args):
             val_loss_items = []
             val_acc_items = []
             figure = None
+
+            label_predictions = np.arange(num_classes)
+            label_ground_truths = np.arange(num_classes)
+            wrong_predictions = []
+
             for val_batch in val_loader:
                 inputs, labels = val_batch
                 inputs = inputs.to(device)
@@ -281,6 +289,19 @@ def train_loop(data_dir, model_dir, args):
                         inputs_np, labels, preds, n=16, shuffle=args.dataset != "MaskSplitByProfileDataset"
                     )
 
+
+                for image, label, pred in zip(inputs.cpu().numpy(), labels.cpu().detach().numpy(), preds.cpu().detach().numpy()):
+                    
+                    # 어쨌거나 전체 label엔 추가
+                    label_ground_truths[label] +=1 
+
+                    #맞으면 추가
+                    if label == pred : 
+                        label_predictions[label] +=1
+                    else: 
+                        wrong_predictions.append(  (image, pred, label) )
+
+
             val_loss = np.sum(val_loss_items) / len(val_loader)
             val_acc = np.sum(val_acc_items) / len(val_set)
             best_val_loss = min(best_val_loss, val_loss)
@@ -301,6 +322,12 @@ def train_loop(data_dir, model_dir, args):
                 print(f"New best model for val accuracy : {val_acc:4.2%}! saving the best model..")
                 torch.save(model.module.state_dict(), f"{save_dir}/best.pth")
                 best_val_acc = val_acc
+
+                best_prediction = label_predictions 
+                best_gt = label_ground_truths
+                best_wrong_predictions = wrong_predictions
+
+
             torch.save(model.module.state_dict(), f"{save_dir}/last.pth")
             print(
                 f"[Val] acc : {val_acc:4.2%}, loss: {val_loss:4.2} || "
@@ -310,6 +337,16 @@ def train_loop(data_dir, model_dir, args):
             logger.add_scalar("Val/accuracy", val_acc, epoch)
             logger.add_figure("results", figure, epoch)
             print()
+
+            wandb.check_all_accuracy(label_predictions, label_ground_truths)
+            wandb.log({"Val/loss" : val_loss, "Val/Acc" : val_acc})
+        
+        wandb.plot_best_accuracy(best_prediction, best_gt)
+        wandb.log_miss_label(best_wrong_predictions)
+    wandb.finish()
+
+
+
 
 
 if __name__ == '__main__':

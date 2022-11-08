@@ -82,10 +82,11 @@ def inference(data_dir, model_dir, output_dir, args):
                     pred = torch.argmax(pred, dim=-1)
                 
                 preds.extend(pred.cpu().numpy())
-
+        
+ 
         info['ans'] = preds
-        save_num = args.save_num 
-        save_path = os.path.join(output_dir, f'output{save_num}.csv')
+
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
         print(f"Inference Done! Inference result saved at {save_path}")
     
@@ -152,7 +153,7 @@ def inference(data_dir, model_dir, output_dir, args):
             final_predictions.append(final_label)
             
         info['ans'] = final_predictions
-        save_path = os.path.join(output_dir, f'output.csv')
+        save_path = os.path.join(output_dir, args.output_name)
         info.to_csv(save_path, index=False)
 
         tempfile = pd.DataFrame()
@@ -189,14 +190,12 @@ if __name__ == '__main__':
     parser.add_argument("--age_dir", type=str, default = "/saved_models/joint_exp/age")
     parser.add_argument("--gender_dir", type=str, default = "/saved_models/joint_exp/gender")
     parser.add_argument("--mask_dir", type=str, default = "/saved_models/joint_exp/mask")
+    parser.add_argument('--output_name', type=str, default='output.csv')
 
     #Will you do tta???
     parser.add_argument('--tta', type=str_to_bool, nargs='?', const=True, default=False)
 
-    ############################ arcface loss 추가부분 ############################
     parser.add_argument('--arcface', type=bool, default=False)
-    parser.add_argument('--save_num', type=str, default='1')
-    ############################ arcface loss 추가부분 ############################
 
     args = parser.parse_args()
     print(args)
