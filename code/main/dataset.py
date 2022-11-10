@@ -17,7 +17,7 @@ from torchvision import transforms
 from torchvision.transforms import Resize, ToTensor, Normalize, Compose, RandomErasing, RandomHorizontalFlip
 
 #utils.py에서 rand_bbox, cutmix 함수를 가져옴
-from utils import rand_bbox, cutmix
+from main.utils import rand_bbox, cutmix
 
 
 #facenet_pytorch, cv2(opencv)는 pip을 통해 별도로 설치가 필요함
