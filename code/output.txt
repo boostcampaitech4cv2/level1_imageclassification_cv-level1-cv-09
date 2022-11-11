@@ -1,1 +1,0 @@
- tree -I "input|wandb|jpg|png|.*csv|__pycache__|inference_output"

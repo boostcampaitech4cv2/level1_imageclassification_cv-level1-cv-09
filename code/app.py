@@ -30,7 +30,7 @@ def main():
         _, y_hat = get_prediction(model, image_bytes)
         label = config["classes"][y_hat.item()]
 
-        st.write(f"Prediction Response is {label}")
+        st.title(f"Prediction Response is {label}")
 
 #TODO: 보안 
 
