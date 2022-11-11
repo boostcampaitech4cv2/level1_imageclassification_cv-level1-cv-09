@@ -15,6 +15,55 @@
 
 </div>
 
+# ⭐DEMO
+
+### 사진을 입력받아, 마스크 착용 여부 / 성별 여부 / 나이 여부를 구분하는 모델
+
+<img src = "https://user-images.githubusercontent.com/81371318/201253185-88be2e3e-65c3-459a-b308-70ef5c424f6e.gif">
+
+
+# 🌳 Folder Structure
+```
+.
+├── CV9조_발표자료_데이터처리.pdf : 발표자료
+├── CV기초대회_CV_팀_리포트(9조).pdf : 랩업리포트
+├── EDA : Data에 대한 접근이 담겨있는 곳
+│   ├── Image_EDA.pdf
+│   ├── correctmask.png
+│   ├── data_EDA.ipynb
+│   └── incorrect_mask.png
+├── README.md
+├── code
+│   ├── __init__.py : Module import를 위해 있음
+│   ├── app.py : streamlit demo 영상을 위해 있음
+│   ├── app_utils.py : streamlit demo 영상을 위해 있음
+│   ├── config.yaml : App demo를 위해 존재
+│   ├── confirm_button_hack.py : App의 authentication을 위한 구현
+│   ├── main : SOTA 모델을 저장한 곳
+│   │   ├── __init__.py
+│   │   ├── best_f1_0.7875.pth : SOTA model의 pth
+│   │   ├── config.json : model config
+│   │   ├── dataset.py
+│   │   ├── inference.py
+│   │   ├── loss.py
+│   │   ├── model.py
+│   │   ├── single_way_training.sh
+│   │   ├── three_way_inference.sh
+│   │   ├── train.py
+│   │   ├── utils.py : cutmix 등의 utils를 구현해놓은 곳
+│   │   └── wandb_experiment.py
+│   ├── predict.py
+│   └── v2
+├── demos : Preprocessing 결과 등을 분석한 곳
+│   ├── MTCNN_demo.ipynb
+│   └── image_example2
+├── requirements.txt
+└── utils : 대회 전처리에 이용한 폴더들을 저장해놓은 곳
+    ├── fix_mislabeled.py
+    └── naver_face_detection.py
+```
+
+
 # ❓ 프로젝트 개요
 
 ## 1. Task 소개

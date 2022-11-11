@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from utils import ArcMarginProduct
+from main.utils import ArcMarginProduct
 
 class ResNet34(nn.Module):
     def __init__(self, num_classes = 18):
