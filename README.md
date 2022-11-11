@@ -36,13 +36,13 @@
 ├── code
 │   ├── __init__.py : Module import를 위해 있음
 │   ├── app.py : streamlit demo 영상을 위해 있음
-│   ├── app_utils.py : 
+│   ├── app_utils.py : streamlit demo 영상을 위해 있음
 │   ├── config.yaml : App demo를 위해 존재
 │   ├── confirm_button_hack.py : App의 authentication을 위한 구현
 │   ├── main : SOTA 모델을 저장한 곳
 │   │   ├── __init__.py
-│   │   ├── best_f1_0.7875.pth
-│   │   ├── config.json
+│   │   ├── best_f1_0.7875.pth : SOTA model의 pth
+│   │   ├── config.json : model config
 │   │   ├── dataset.py
 │   │   ├── inference.py
 │   │   ├── loss.py
