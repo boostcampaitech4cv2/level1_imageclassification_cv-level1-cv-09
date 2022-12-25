@@ -15,7 +15,15 @@
 
 </div>
 
+# Result
+- Public 1등 -> Private 1등
+![image](https://user-images.githubusercontent.com/81371318/209462435-dae68950-a643-4429-8dd2-93e4013a0efe.png)
+
+
+
 # ⭐DEMO
+
+> 순전히 모델의 operation을 설명하기 위한 demo이며, 이를 위한 코드는 Repository 안에 들어있지 않습니다.
 
 ### 사진을 입력받아, 마스크 착용 여부 / 성별 여부 / 나이 여부를 구분하는 모델
 
